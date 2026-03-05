@@ -154,8 +154,8 @@ export function useFaceTracking(
           const pitch = euler.x - baselineRef.current.pitch;
           const roll = euler.z - baselineRef.current.roll;
 
-          rawHead.setFromEuler(new Euler(pitch * 0.95, yaw * 1.05, roll * 0.85, 'XYZ'));
-          rawNeck.setFromEuler(new Euler(pitch * 0.4, yaw * 0.5, roll * 0.3, 'XYZ'));
+          rawHead.setFromEuler(new Euler(-pitch * 0.95, yaw * 1.05, roll * 0.85, 'XYZ'));
+          rawNeck.setFromEuler(new Euler(-pitch * 0.4, yaw * 0.5, roll * 0.3, 'XYZ'));
           smoothHeadRef.current.slerp(rawHead, 0.28);
           smoothNeckRef.current.slerp(rawNeck, 0.28);
 
