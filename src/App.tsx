@@ -27,6 +27,12 @@ const STICKER_POSITIONS = [
   { top: '68%', right: '16%' },
 ];
 
+const formatCharacterLabel = (name: string): string =>
+  name
+    .replace(/\.vrm$/i, '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .trim();
+
 function App() {
   const [backgrounds, setBackgrounds] = useState<AssetItem[]>([]);
   const [stickers, setStickers] = useState<AssetItem[]>([]);
@@ -36,6 +42,10 @@ function App() {
   const [assetError, setAssetError] = useState<string | null>(null);
   const [assetsLoading, setAssetsLoading] = useState(true);
   const [modelLoading, setModelLoading] = useState(true);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
+  const [bodyTrackingEnabled, setBodyTrackingEnabled] = useState(
+    () => (import.meta.env.VITE_ENABLE_BODY_TRACKING ?? '').toLowerCase() === 'true',
+  );
   const [modelUrl, setModelUrl] = useState<string | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -50,7 +60,7 @@ function App() {
     startTracking,
     stopTracking,
     calibrateNow,
-  } = useFaceTracking(cameraRef);
+  } = useFaceTracking(cameraRef, { bodyTrackingEnabled });
 
   const {
     activeBackgroundId,
@@ -71,8 +81,8 @@ function App() {
     'Avatar',
     {
       avatarScale: { value: 1.1, min: 0.6, max: 1.8, step: 0.01 },
-      yOffset: { value: -1.1, min: -1.8, max: -0.3, step: 0.01 },
-      cameraZoom: { value: 3.1, min: 2.2, max: 4.6, step: 0.01 },
+      yOffset: { value: -0.3, min: -2.2, max: 1.2, step: 0.01 },
+      cameraZoom: { value: 1.5, min: 1.5, max: 5.2, step: 0.01 },
       bgDimmer: { value: 0.1, min: 0, max: 0.5, step: 0.01 },
     },
     { collapsed: true },
@@ -196,6 +206,13 @@ function App() {
     [],
   );
 
+  useEffect(() => {
+    if (initialLoadDone) return;
+    if (!assetsLoading && !modelLoading) {
+      setInitialLoadDone(true);
+    }
+  }, [assetsLoading, initialLoadDone, modelLoading]);
+
   const panelItems = useMemo(() => {
     if (drawerPanel === 'backgrounds') return backgrounds;
     if (drawerPanel === 'stickers') return stickers;
@@ -284,6 +301,11 @@ function App() {
     await startTracking();
   };
 
+  const handleToggleBodyTracking = () => {
+    if (isTracking) stopTracking();
+    setBodyTrackingEnabled(prev => !prev);
+  };
+
   const panelLabel =
     drawerPanel === 'backgrounds'
       ? 'Backgrounds'
@@ -294,6 +316,13 @@ function App() {
           : drawerPanel === 'settings'
             ? 'Settings'
             : '';
+  const loadingText = assetsLoading
+    ? 'Loading asset packs...'
+    : modelLoading
+      ? 'Loading character...'
+      : 'Starting camera...';
+  const showInitialSplash = !initialLoadDone && (assetsLoading || modelLoading);
+  const showStickyLoading = initialLoadDone && (modelLoading || cameraLoading);
 
   return (
     <div
@@ -357,6 +386,10 @@ function App() {
           {drawerPanel === 'settings' ? (
             <div className="settings-panel">
               <p>Camera status: {statusText}</p>
+              <p>Body tracking: {bodyTrackingEnabled ? 'On' : 'Off'}</p>
+              <button type="button" onClick={handleToggleBodyTracking}>
+                {bodyTrackingEnabled ? 'Disable Body Tracking' : 'Enable Body Tracking'}
+              </button>
               <button type="button" onClick={calibrateNow}>
                 Calibrate Face
               </button>
@@ -373,7 +406,9 @@ function App() {
                     : item.kind === 'sticker'
                       ? activeStickerIds.includes(item.id)
                       : activeCharacterId === item.id;
-                const preview = item.kind === 'character' && 'source' in item ? null : item.url;
+                const displayName = item.kind === 'character' ? formatCharacterLabel(item.name) : item.name;
+                const preview = item.kind === 'character' ? item.previewUrl ?? null : item.url;
+                const fallbackInitial = (displayName || item.name).trim().charAt(0).toUpperCase();
                 return (
                   <button
                     type="button"
@@ -382,11 +417,15 @@ function App() {
                     onClick={() => selectItem(item)}
                   >
                     {preview ? (
-                      <img src={preview} alt={item.name} />
+                      <img
+                        src={preview}
+                        alt={displayName}
+                        className={item.kind === 'character' ? 'character-preview' : undefined}
+                      />
                     ) : (
-                      <div className="avatar-dot">{item.name.slice(0, 1).toUpperCase()}</div>
+                      <div className="avatar-dot">{fallbackInitial || '?'}</div>
                     )}
-                    <span>{item.name}</span>
+                    <span>{displayName}</span>
                   </button>
                 );
               })}
@@ -456,24 +495,26 @@ function App() {
         </div>
       ) : null}
 
-      {(assetsLoading || modelLoading || cameraLoading) && (
+      {showInitialSplash && (
         <div className="splash">
           <div className="spinner" />
           <h1>KJVTuber</h1>
-          <p>
-            {assetsLoading
-              ? 'Loading asset packs...'
-              : modelLoading
-                ? 'Loading character...'
-                : 'Starting camera...'}
-          </p>
+          <p>{loadingText}</p>
+        </div>
+      )}
+      {showStickyLoading && (
+        <div className="loading-chip" role="status" aria-live="polite">
+          <div className="spinner small" />
+          <p>{loadingText}</p>
         </div>
       )}
 
       {assetError || trackingError ? (
         <p className="error-banner">{assetError || trackingError}</p>
       ) : null}
-      <Leva collapsed hidden={controlsHidden} />
+      <div className="leva-center">
+        <Leva collapsed hidden={controlsHidden} fill />
+      </div>
     </div>
   );
 }

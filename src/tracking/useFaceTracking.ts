@@ -1,7 +1,9 @@
 import {
   FaceLandmarker,
   FilesetResolver,
+  PoseLandmarker,
   type FaceLandmarkerResult,
+  type PoseLandmarkerResult,
 } from '@mediapipe/tasks-vision';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Euler, Matrix4, Quaternion } from 'three';
@@ -10,6 +12,8 @@ import type { RigOutput } from '../types/vtuber';
 const DEFAULT_WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm';
 const DEFAULT_MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+const DEFAULT_POSE_MODEL_URL =
+  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value));
@@ -40,10 +44,17 @@ export interface FaceTrackingController {
   calibrateNow: () => void;
 }
 
+interface FaceTrackingOptions {
+  bodyTrackingEnabled?: boolean;
+}
+
 export function useFaceTracking(
   videoRef: React.RefObject<HTMLVideoElement | null>,
+  options?: FaceTrackingOptions,
 ): FaceTrackingController {
+  const bodyTrackingEnabled = options?.bodyTrackingEnabled ?? false;
   const landmarkerRef = useRef<FaceLandmarker | null>(null);
+  const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   const baselineRef = useRef<FaceBaseline>({ yaw: 0, pitch: 0, roll: 0 });
@@ -103,6 +114,23 @@ export function useFaceTracking(
     return landmarker;
   }, []);
 
+  const ensurePoseLandmarker = useCallback(async (): Promise<PoseLandmarker> => {
+    if (poseLandmarkerRef.current) return poseLandmarkerRef.current;
+    const wasmUrl = import.meta.env.VITE_MEDIAPIPE_WASM_URL || DEFAULT_WASM_URL;
+    const modelUrl = import.meta.env.VITE_MEDIAPIPE_POSE_MODEL_URL || DEFAULT_POSE_MODEL_URL;
+    const vision = await FilesetResolver.forVisionTasks(wasmUrl);
+    const poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: modelUrl,
+        delegate: 'GPU',
+      },
+      numPoses: 1,
+      runningMode: 'VIDEO',
+    });
+    poseLandmarkerRef.current = poseLandmarker;
+    return poseLandmarker;
+  }, []);
+
   const startTracking = useCallback(async () => {
     const video = videoRef.current;
     if (!video || isTracking) return;
@@ -121,19 +149,121 @@ export function useFaceTracking(
       await video.play();
 
       const landmarker = await ensureLandmarker();
+      const poseLandmarker = bodyTrackingEnabled ? await ensurePoseLandmarker() : null;
       setIsTracking(true);
       trackingActiveRef.current = true;
-      setStatusText('Tracking face');
+      setStatusText(bodyTrackingEnabled ? 'Tracking face + body' : 'Tracking face');
       setIsLoading(false);
 
       const matrix = new Matrix4();
       const euler = new Euler(0, 0, 0, 'XYZ');
       const rawHead = new Quaternion();
       const rawNeck = new Quaternion();
+      const toQuat = (x: number, y: number, z: number): Quaternion =>
+        new Quaternion().setFromEuler(new Euler(x, y, z, 'XYZ'));
+      const toRigQuat = (q: Quaternion) => ({ x: q.x, y: q.y, z: q.z, w: q.w });
+      const clampSigned = (value: number, limit: number): number => clamp(value, -limit, limit);
+      const mapPoseToRig = (result: PoseLandmarkerResult) => {
+        const points = result.landmarks?.[0];
+        if (!points || points.length < 25) return undefined;
+        const leftShoulder = points[11];
+        const rightShoulder = points[12];
+        const leftElbow = points[13];
+        const rightElbow = points[14];
+        const leftWrist = points[15];
+        const rightWrist = points[16];
+        const leftHip = points[23];
+        const rightHip = points[24];
+        if (
+          !leftShoulder ||
+          !rightShoulder ||
+          !leftElbow ||
+          !rightElbow ||
+          !leftWrist ||
+          !rightWrist ||
+          !leftHip ||
+          !rightHip
+        ) {
+          return undefined;
+        }
+
+        const shoulderMidZ = (leftShoulder.z + rightShoulder.z) * 0.5;
+        const hipMidZ = (leftHip.z + rightHip.z) * 0.5;
+
+        const chestRoll = clampSigned(-(rightShoulder.y - leftShoulder.y) * 2.3, 0.45);
+        const chestYaw = clampSigned(-(leftShoulder.z - rightShoulder.z) * 2.6, 0.5);
+        const torsoPitch = clampSigned((shoulderMidZ - hipMidZ) * 2.8, 0.45);
+        const spinePitch = torsoPitch * 0.65;
+
+        const leftUpper = {
+          x: leftElbow.x - leftShoulder.x,
+          y: leftElbow.y - leftShoulder.y,
+          z: leftElbow.z - leftShoulder.z,
+        };
+        const rightUpper = {
+          x: rightElbow.x - rightShoulder.x,
+          y: rightElbow.y - rightShoulder.y,
+          z: rightElbow.z - rightShoulder.z,
+        };
+        const leftLower = {
+          x: leftWrist.x - leftElbow.x,
+          y: leftWrist.y - leftElbow.y,
+          z: leftWrist.z - leftElbow.z,
+        };
+        const rightLower = {
+          x: rightWrist.x - rightElbow.x,
+          y: rightWrist.y - rightElbow.y,
+          z: rightWrist.z - rightElbow.z,
+        };
+
+        const leftUpperQuat = toQuat(
+          clampSigned(-leftUpper.y * 2.4, 1.2),
+          clampSigned(-leftUpper.z * 3, 1),
+          clampSigned(leftUpper.x * 3.2 + 1.15, 1.4),
+        );
+        const rightUpperQuat = toQuat(
+          clampSigned(-rightUpper.y * 2.4, 1.2),
+          clampSigned(rightUpper.z * 3, 1),
+          clampSigned(rightUpper.x * 3.2 - 1.15, 1.4),
+        );
+        const leftLowerQuat = toQuat(
+          clampSigned(-leftLower.y * 2.6 + 0.2, 1.2),
+          clampSigned(-leftLower.z * 2.2, 0.8),
+          clampSigned(leftLower.x * 1.2 - 0.08, 0.8),
+        );
+        const rightLowerQuat = toQuat(
+          clampSigned(-rightLower.y * 2.6 + 0.2, 1.2),
+          clampSigned(rightLower.z * 2.2, 0.8),
+          clampSigned(rightLower.x * 1.2 + 0.08, 0.8),
+        );
+        const leftHandQuat = toQuat(clampSigned(-leftLower.y * 2, 0.7), 0, 0.04);
+        const rightHandQuat = toQuat(clampSigned(-rightLower.y * 2, 0.7), 0, -0.04);
+
+        return {
+          hips: toRigQuat(toQuat(torsoPitch * 0.35, chestYaw * 0.25, chestRoll * 0.3)),
+          spine: toRigQuat(toQuat(spinePitch, chestYaw * 0.4, chestRoll * 0.5)),
+          chest: toRigQuat(toQuat(torsoPitch, chestYaw, chestRoll)),
+          neck: toRigQuat(toQuat(0, 0, 0)),
+          leftArm: {
+            upper: toRigQuat(rightUpperQuat),
+            lower: toRigQuat(rightLowerQuat),
+            hand: toRigQuat(rightHandQuat),
+          },
+          rightArm: {
+            upper: toRigQuat(leftUpperQuat),
+            lower: toRigQuat(leftLowerQuat),
+            hand: toRigQuat(leftHandQuat),
+          },
+        };
+      };
 
       const tick = () => {
         if (!videoRef.current || !trackingActiveRef.current) return;
         const result = landmarker.detectForVideo(videoRef.current, performance.now());
+        const poseResult = poseLandmarker
+          ? poseLandmarker.detectForVideo(videoRef.current, performance.now())
+          : null;
+        const poseRig = poseResult ? mapPoseToRig(poseResult) : undefined;
         const faceMatrix = result.facialTransformationMatrixes?.[0]?.data;
         const blendshapeMap = mapBlendshapes(result);
         if (faceMatrix) {
@@ -147,7 +277,7 @@ export function useFaceTracking(
               roll: euler.z,
             };
             shouldCalibrateRef.current = false;
-            setStatusText('Tracking face');
+            setStatusText(bodyTrackingEnabled ? 'Tracking face + body' : 'Tracking face');
           }
 
           const yaw = euler.y - baselineRef.current.yaw;
@@ -161,6 +291,7 @@ export function useFaceTracking(
 
           setRigOutput({
             timestampMs: performance.now(),
+            pose: poseRig,
             face: {
               head: {
                 x: smoothHeadRef.current.x,
@@ -214,6 +345,11 @@ export function useFaceTracking(
               },
             },
           });
+        } else if (poseRig) {
+          setRigOutput({
+            timestampMs: performance.now(),
+            pose: poseRig,
+          });
         }
         rafRef.current = requestAnimationFrame(tick);
       };
@@ -226,7 +362,14 @@ export function useFaceTracking(
       setError(err instanceof Error ? err.message : 'Failed to start camera.');
       stopTracking();
     }
-  }, [ensureLandmarker, isTracking, stopTracking, videoRef]);
+  }, [
+    bodyTrackingEnabled,
+    ensureLandmarker,
+    ensurePoseLandmarker,
+    isTracking,
+    stopTracking,
+    videoRef,
+  ]);
 
   return {
     isTracking,

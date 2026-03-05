@@ -19,6 +19,15 @@ body {
   min-height: 100vh;
 }
 
+.leva-center {
+  position: fixed;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(360px, calc(100vw - 2rem));
+  z-index: 11;
+}
+
 .app-shell {
   position: relative;
   min-height: 100vh;
@@ -129,6 +138,27 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
   padding-right: 0.2rem;
+  scrollbar-width: auto;
+  scrollbar-color: rgba(196, 233, 255, 0.55) rgba(22, 53, 76, 0.6);
+}
+
+.thumb-grid::-webkit-scrollbar {
+  width: 12px;
+}
+
+.thumb-grid::-webkit-scrollbar-track {
+  background: rgba(22, 53, 76, 0.6);
+  border-radius: 999px;
+}
+
+.thumb-grid::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(180, 222, 248, 0.75), rgba(129, 180, 212, 0.72));
+  border-radius: 999px;
+  border: 2px solid rgba(22, 53, 76, 0.6);
+}
+
+.thumb-grid::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(205, 237, 255, 0.86), rgba(151, 199, 228, 0.84));
 }
 
 .thumb-card {
@@ -149,6 +179,10 @@ body {
   aspect-ratio: 1 / 1;
   border-radius: 10px;
   object-fit: cover;
+}
+
+.thumb-card img.character-preview {
+  border-radius: 999px;
 }
 
 .thumb-card.active {
@@ -322,6 +356,38 @@ body {
   border-top-color: #fff;
   justify-self: center;
   animation: spin 0.8s linear infinite;
+}
+
+.spinner.small {
+  width: 24px;
+  height: 24px;
+  border-width: 3px;
+}
+
+.loading-chip {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1rem;
+  border-radius: 999px;
+  background:
+    linear-gradient(140deg, rgba(74, 223, 255, 0.5), rgba(17, 79, 127, 0.45)),
+    rgba(18, 50, 77, 0.5);
+  border: 1px solid rgba(202, 235, 255, 0.55);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 12px 28px rgba(8, 34, 55, 0.28);
+  pointer-events: none;
+}
+
+.loading-chip p {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 
 .error-banner {
