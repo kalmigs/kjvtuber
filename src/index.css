@@ -1,10 +1,360 @@
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@500;700&display=swap');
+
+:root {
+  font-family: 'Nunito', 'Segoe UI', sans-serif;
+  color: #eaf8ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
-  font-family: Arial, sans-serif;
+  min-height: 100vh;
+  background: #143a58;
 }
 
 #root {
   min-height: 100vh;
+}
+
+.app-shell {
+  position: relative;
+  min-height: 100vh;
+  background-position: center;
+  background-size: cover;
+  overflow: hidden;
+}
+
+.app-shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.12), transparent 38%),
+    radial-gradient(circle at 83% 72%, rgba(255, 255, 255, 0.08), transparent 30%);
+}
+
+.canvas-wrap {
+  position: absolute;
+  inset: 0;
+}
+
+.camera-feed {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  width: 180px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 2px solid rgba(215, 238, 255, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.sticker-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.sticker {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.25));
+}
+
+.drawer {
+  position: absolute;
+  inset: 1rem auto 1rem 1rem;
+  width: min(340px, calc(100vw - 2rem));
+  padding: 1rem;
+  border-radius: 18px;
+  background: rgba(17, 39, 56, 0.82);
+  backdrop-filter: blur(10px);
+  transform: translateX(-115%);
+  transition: transform 220ms ease;
+  z-index: 12;
+}
+
+.drawer.open {
+  transform: translateX(0);
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.drawer-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.drawer-actions button,
+.close-btn,
+.settings-panel button {
+  border: 0;
+  border-radius: 12px;
+  background: #dff4ff;
+  color: #18415d;
+  font-weight: 700;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+}
+
+.close-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+.drawer h2 {
+  font-family: 'Baloo 2', 'Nunito', sans-serif;
+  letter-spacing: 0.02em;
+  margin: 0.8rem 0;
+}
+
+.thumb-grid {
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding-right: 0.2rem;
+}
+
+.thumb-card {
+  border: 2px solid transparent;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  color: #ecf8ff;
+  padding: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: center;
+  cursor: pointer;
+}
+
+.thumb-card img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.thumb-card.active {
+  border-color: #29c4ff;
+  box-shadow: 0 0 0 2px rgba(41, 196, 255, 0.22);
+}
+
+.thumb-card span {
+  font-size: 0.82rem;
+  width: 100%;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.avatar-dot {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 999px;
   display: grid;
   place-items: center;
+  font-size: 2rem;
+  font-weight: 800;
+  background: linear-gradient(150deg, #75c3ff, #c8e7ff);
+  color: #173f5b;
+}
+
+.settings-panel {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.settings-panel p {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.control-rail {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: grid;
+  gap: 0.6rem;
+  z-index: 12;
+}
+
+.control-rail button,
+.reveal-btn {
+  border: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: rgba(232, 248, 255, 0.7);
+  color: #194866;
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.menu-cluster {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  width: 180px;
+  height: 180px;
+  z-index: 13;
+}
+
+.main-button {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 84px;
+  height: 84px;
+  border: 0;
+  border-radius: 999px;
+  background: #19a8ff;
+  color: white;
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 800;
+  box-shadow: 0 12px 26px rgba(4, 86, 143, 0.35);
+  cursor: pointer;
+}
+
+.main-button.active {
+  background: #08c862;
+}
+
+.orbit-btn {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(18, 65, 94, 0.88);
+  color: #e9f6ff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  opacity: 0;
+  transform: scale(0.65);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+  cursor: pointer;
+}
+
+.menu-cluster.open .orbit-btn,
+.orbit-btn.visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.orbit-btn.bg {
+  right: 112px;
+  bottom: 92px;
+}
+
+.orbit-btn.st {
+  right: 125px;
+  bottom: 38px;
+}
+
+.orbit-btn.ch {
+  right: 75px;
+  bottom: 132px;
+}
+
+.orbit-btn.set {
+  right: 36px;
+  bottom: 142px;
+}
+
+.reveal-btn {
+  position: absolute;
+  right: 1rem;
+  top: 1rem;
+  z-index: 12;
+}
+
+.splash {
+  position: absolute;
+  inset: 0;
+  z-index: 14;
+  display: grid;
+  place-content: center;
+  gap: 0.75rem;
+  background: radial-gradient(circle at 10% 20%, #6de9ff, #27557d 62%, #102942);
+  text-align: center;
+}
+
+.splash h1 {
+  margin: 0;
+  font-family: 'Baloo 2', sans-serif;
+  font-size: clamp(2rem, 7vw, 4rem);
+  letter-spacing: 0.04em;
+}
+
+.splash p {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.spinner {
+  width: 54px;
+  height: 54px;
+  border-radius: 999px;
+  border: 5px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  justify-self: center;
+  animation: spin 0.8s linear infinite;
+}
+
+.error-banner {
+  position: absolute;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  margin: 0;
+  background: rgba(145, 22, 22, 0.88);
+  border-radius: 999px;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.9rem;
+  z-index: 20;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 820px) {
+  .drawer {
+    width: min(280px, calc(100vw - 1.5rem));
+    inset: 0.75rem auto 0.75rem 0.75rem;
+  }
+
+  .thumb-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sticker {
+    width: 88px;
+    height: 88px;
+  }
 }
